@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Pedidos</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="header-content">
+                <div>
+                    <h1>Painel de Pedidos</h1>
+                    <p>Acompanhe e filtre os pedidos em tempo real</p>
+                </div>
+                <button id="btn-novo-pedido" class="btn-primary">+ Novo Pedido</button>
+            </div>
+            
+            <div class="filters-container">
+                <span class="filter-label">Filtrar por setor:</span>
+                <div class="filter-buttons" id="filter-buttons">
+                    <!-- Botões de filtro serão gerados via JS -->
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="status-summary" id="status-summary">
+                <!-- Resumo dos status será gerado via JS -->
+            </div>
+
+            <div id="loading" class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Carregando pedidos...</p>
+            </div>
+            <div id="error-message" class="error-message hidden">
+                <p>Ocorreu um erro ao carregar os dados.</p>
+            </div>
+            
+            <!-- Os cards dos pedidos serão inseridos aqui -->
+            <div class="orders-grid" id="orders-grid">
+                
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Novo Pedido -->
+    <div id="modal-novo-pedido" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Novo Pedido</h2>
+                <button id="btn-fechar-modal" class="btn-close">&times;</button>
+            </div>
+            <form id="form-novo-pedido" class="order-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cliente">Cliente *</label>
+                        <input type="text" id="cliente" required placeholder="Nome do cliente">
+                    </div>
+                    <div class="form-group">
+                        <label for="telefone">Telefone</label>
+                        <input type="text" id="telefone" placeholder="(00) 00000-0000">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="setor">Setor *</label>
+                        <input type="text" id="setor" required placeholder="Ex: Pet Shop, Eletrônicos">
+                    </div>
+                    <div class="form-group">
+                        <label for="servico">Serviço/Produto *</label>
+                        <input type="text" id="servico" required placeholder="O que foi pedido?">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="valor">Valor (R$) *</label>
+                        <input type="number" id="valor" step="0.01" min="0" required placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label for="data_pedido">Data de Entrega *</label>
+                        <input type="text" id="data_pedido" required placeholder="Ex: Sábado, 09h ou 05/09/2026">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="status">Status *</label>
+                        <select id="status" required>
+                            <option value="Pendente">Pendente</option>
+                            <option value="Em produção">Em produção</option>
+                            <option value="Confirmado">Confirmado</option>
+                            <option value="Cancelado">Cancelado</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="observacoes">Observações</label>
+                    <textarea id="observacoes" rows="3" placeholder="Informações adicionais..."></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" id="btn-cancelar" class="btn-secondary">Cancelar</button>
+                    <button type="submit" class="btn-primary" id="btn-salvar-pedido">Salvar Pedido</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scripts da Aplicação -->
+    <script src="script.js"></script>
+</body>
+</html>
