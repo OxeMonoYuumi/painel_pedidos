@@ -26,6 +26,12 @@ const statusSummary = document.getElementById('status-summary');
 document.addEventListener('DOMContentLoaded', initApp);
 
 async function initApp() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) {
+        window.location.href = 'login.html';
+        return;
+    }
+
     configurarEventos();
     await fetchPedidos();
     if (pedidos.length > 0) {
@@ -64,6 +70,8 @@ function configurarEventos() {
     const fecharModal = () => {
         modalNovoPedido.classList.add('hidden');
         formNovoPedido.reset();
+        document.getElementById('pedido_id').value = '';
+        document.querySelector('#modal-novo-pedido h2').textContent = 'Novo Pedido';
     };
 
     btnFecharModal.addEventListener('click', fecharModal);
@@ -74,11 +82,21 @@ function configurarEventos() {
         if (e.target === modalNovoPedido) fecharModal();
     });
 
+    // Logout
+    const btnLogout = document.getElementById('btn-logout');
+    if (btnLogout) {
+        btnLogout.addEventListener('click', async () => {
+            await supabaseClient.auth.signOut();
+            window.location.href = 'login.html';
+        });
+    }
+
     // Submit do formulário
     formNovoPedido.addEventListener('submit', async (e) => {
         e.preventDefault();
 
-        const novoPedido = {
+        const id = document.getElementById('pedido_id').value;
+        const dadosPedido = {
             cliente: document.getElementById('cliente').value,
             telefone: document.getElementById('telefone').value,
             setor: document.getElementById('setor').value,
@@ -94,7 +112,14 @@ function configurarEventos() {
             btnSalvar.textContent = 'Salvando...';
             btnSalvar.disabled = true;
 
-            const { error } = await supabaseClient.from('pedidos').insert([novoPedido]);
+            let error;
+            if (id) {
+                const res = await supabaseClient.from('pedidos').update(dadosPedido).eq('id', id);
+                error = res.error;
+            } else {
+                const res = await supabaseClient.from('pedidos').insert([dadosPedido]);
+                error = res.error;
+            }
 
             if (error) throw error;
 
@@ -106,8 +131,8 @@ function configurarEventos() {
                 renderizarPedidos();
             }
 
-        } catch (error) {
-            console.error('Erro ao salvar pedido:', error);
+        } catch (err) {
+            console.error('Erro ao salvar pedido:', err);
             alert('Erro ao salvar o pedido. Verifique os dados e tente novamente.');
         } finally {
             const btnSalvar = document.getElementById('btn-salvar-pedido');
@@ -233,6 +258,10 @@ function criarCardPedido(pedido, index) {
         <div class="card-footer">
             ${pedido.observacoes ? `<p><strong>Obs:</strong> ${escapeHtml(pedido.observacoes)}</p>` : ''}
             <span class="sector-chip">${escapeHtml(pedido.setor || 'Outro')}</span>
+            <div class="card-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 0.5rem;">
+                <button class="btn-icon btn-edit" onclick="window.editarPedido('${pedido.id}')" title="Editar">✏️ Editar</button>
+                <button class="btn-icon btn-delete" onclick="window.deletarPedido('${pedido.id}')" title="Excluir">🗑️ Excluir</button>
+            </div>
         </div>
     `;
 
@@ -301,3 +330,48 @@ function escapeHtml(unsafe) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+
+window.deletarPedido = async (id) => {
+    if (!confirm('Tem certeza que deseja excluir este pedido?')) return;
+    
+    try {
+        mostrarLoading(true);
+        const { error } = await supabaseClient.from('pedidos').delete().eq('id', id);
+        if (error) throw error;
+        
+        await fetchPedidos();
+        if (pedidos.length > 0) {
+            extrairSetores();
+            renderizarFiltros();
+            renderizarPedidos();
+        } else {
+            ordersGrid.innerHTML = '';
+            setoresAtuais.clear();
+            renderizarFiltros();
+            renderizarResumo([]);
+        }
+    } catch (error) {
+        console.error('Erro ao deletar pedido:', error);
+        alert('Erro ao excluir pedido.');
+    } finally {
+        mostrarLoading(false);
+    }
+};
+
+window.editarPedido = (id) => {
+    const pedido = pedidos.find(p => p.id === id);
+    if (!pedido) return;
+    
+    document.getElementById('pedido_id').value = pedido.id;
+    document.getElementById('cliente').value = pedido.cliente || '';
+    document.getElementById('telefone').value = pedido.telefone || '';
+    document.getElementById('setor').value = pedido.setor || '';
+    document.getElementById('servico').value = pedido.servico || '';
+    document.getElementById('valor').value = pedido.valor || '';
+    document.getElementById('data_pedido').value = pedido.data_pedido || '';
+    document.getElementById('status').value = pedido.status || 'Pendente';
+    document.getElementById('observacoes').value = pedido.observacoes || '';
+    
+    document.querySelector('#modal-novo-pedido h2').textContent = 'Editar Pedido';
+    modalNovoPedido.classList.remove('hidden');
+};
