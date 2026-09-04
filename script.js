@@ -1,0 +1,303 @@
+// Configurações do Supabase
+const supabaseUrl = 'https://pwyytcyofxtriulqesqm.supabase.co';
+const supabaseKey = 'sb_publishable_vk-vctYaPnPRm0fWlRkcTQ_RtYigr2L';
+const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+// Estado da Aplicação
+let pedidos = [];
+let setoresAtuais = new Set();
+let setorSelecionado = 'Todos';
+
+// Elementos do DOM
+const ordersGrid = document.getElementById('orders-grid');
+const filterButtonsContainer = document.getElementById('filter-buttons');
+const loadingSpinner = document.getElementById('loading');
+const errorMessage = document.getElementById('error-message');
+
+// Elementos do Modal e Formulário
+const btnNovoPedido = document.getElementById('btn-novo-pedido');
+const modalNovoPedido = document.getElementById('modal-novo-pedido');
+const btnFecharModal = document.getElementById('btn-fechar-modal');
+const btnCancelar = document.getElementById('btn-cancelar');
+const formNovoPedido = document.getElementById('form-novo-pedido');
+const statusSummary = document.getElementById('status-summary');
+
+// Inicialização
+document.addEventListener('DOMContentLoaded', initApp);
+
+async function initApp() {
+    configurarEventos();
+    await fetchPedidos();
+    if (pedidos.length > 0) {
+        extrairSetores();
+        renderizarFiltros();
+        renderizarPedidos();
+    }
+}
+
+// Buscar Pedidos do Supabase
+async function fetchPedidos() {
+    try {
+        mostrarLoading(true);
+
+        const { data, error } = await supabaseClient
+            .from('pedidos')
+            .select('*')
+            .order('criado_em', { ascending: false });
+
+        if (error) throw error;
+
+        pedidos = data;
+
+    } catch (error) {
+        console.error('Erro ao buscar pedidos:', error);
+        mostrarErro(true);
+    } finally {
+        mostrarLoading(false);
+    }
+}
+
+// Configurar Eventos do Modal e Formulário
+function configurarEventos() {
+    btnNovoPedido.addEventListener('click', () => modalNovoPedido.classList.remove('hidden'));
+
+    const fecharModal = () => {
+        modalNovoPedido.classList.add('hidden');
+        formNovoPedido.reset();
+    };
+
+    btnFecharModal.addEventListener('click', fecharModal);
+    btnCancelar.addEventListener('click', fecharModal);
+
+    // Fechar ao clicar fora
+    modalNovoPedido.addEventListener('click', (e) => {
+        if (e.target === modalNovoPedido) fecharModal();
+    });
+
+    // Submit do formulário
+    formNovoPedido.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const novoPedido = {
+            cliente: document.getElementById('cliente').value,
+            telefone: document.getElementById('telefone').value,
+            setor: document.getElementById('setor').value,
+            servico: document.getElementById('servico').value,
+            valor: parseFloat(document.getElementById('valor').value),
+            data_pedido: document.getElementById('data_pedido').value,
+            status: document.getElementById('status').value,
+            observacoes: document.getElementById('observacoes').value,
+        };
+
+        try {
+            const btnSalvar = document.getElementById('btn-salvar-pedido');
+            btnSalvar.textContent = 'Salvando...';
+            btnSalvar.disabled = true;
+
+            const { error } = await supabaseClient.from('pedidos').insert([novoPedido]);
+
+            if (error) throw error;
+
+            fecharModal();
+            await fetchPedidos();
+            if (pedidos.length > 0) {
+                extrairSetores();
+                renderizarFiltros();
+                renderizarPedidos();
+            }
+
+        } catch (error) {
+            console.error('Erro ao salvar pedido:', error);
+            alert('Erro ao salvar o pedido. Verifique os dados e tente novamente.');
+        } finally {
+            const btnSalvar = document.getElementById('btn-salvar-pedido');
+            btnSalvar.textContent = 'Salvar Pedido';
+            btnSalvar.disabled = false;
+        }
+    });
+}
+
+// Lógica de Filtros
+function extrairSetores() {
+    setoresAtuais.clear();
+    pedidos.forEach(pedido => {
+        if (pedido.setor) {
+            setoresAtuais.add(pedido.setor);
+        }
+    });
+}
+
+function renderizarFiltros() {
+    filterButtonsContainer.innerHTML = '';
+
+    // Botão "Todos"
+    const btnTodos = criarBotaoFiltro('Todos', setorSelecionado === 'Todos');
+    filterButtonsContainer.appendChild(btnTodos);
+
+    // Botões dos Setores
+    const setoresArray = Array.from(setoresAtuais).sort();
+    setoresArray.forEach(setor => {
+        const btn = criarBotaoFiltro(setor, setorSelecionado === setor);
+        filterButtonsContainer.appendChild(btn);
+    });
+}
+
+function criarBotaoFiltro(setor, isActive) {
+    const button = document.createElement('button');
+    button.className = `filter-btn ${isActive ? 'active' : ''}`;
+    button.textContent = setor;
+    button.addEventListener('click', () => {
+        setorSelecionado = setor;
+        renderizarFiltros(); // Atualiza a classe active
+        renderizarPedidos(); // Filtra e renderiza os cards
+    });
+    return button;
+}
+
+// Renderização dos Cards
+function renderizarPedidos() {
+    ordersGrid.innerHTML = '';
+
+    const pedidosFiltrados = setorSelecionado === 'Todos'
+        ? pedidos
+        : pedidos.filter(p => p.setor === setorSelecionado);
+
+    renderizarResumo(pedidosFiltrados);
+
+    if (pedidosFiltrados.length === 0) {
+        ordersGrid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); padding: 2rem;">Nenhum pedido encontrado para este setor.</p>';
+        return;
+    }
+
+    pedidosFiltrados.forEach((pedido, index) => {
+        const card = criarCardPedido(pedido, index);
+        ordersGrid.appendChild(card);
+    });
+}
+
+function criarCardPedido(pedido, index) {
+    const div = document.createElement('div');
+    div.className = 'order-card';
+
+    // Animação em cascata (delay baseado no índice)
+    div.style.animationDelay = `${index * 0.05}s`;
+
+    // Formatação de Valores
+    const valorFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pedido.valor || 0);
+
+    // Formatação da classe de status
+    const statusClass = pedido.status ? `status-${pedido.status.toLowerCase().replace(' ', '-')}` : 'status-default';
+    const statusText = pedido.status || 'Sem status';
+
+    // Formatação da Data (criado_em)
+    let dataFormatada = pedido.data_pedido || '';
+    if (!dataFormatada && pedido.criado_em) {
+        const dataObj = new Date(pedido.criado_em);
+        dataFormatada = new Intl.DateTimeFormat('pt-BR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        }).format(dataObj);
+    }
+
+    div.innerHTML = `
+        <div class="card-header">
+            <div class="client-info">
+                <h2>${escapeHtml(pedido.cliente || 'Cliente não informado')}</h2>
+                <p>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                    ${escapeHtml(pedido.telefone || 'Sem telefone')}
+                </p>
+            </div>
+            <span class="status-badge ${statusClass}">${escapeHtml(statusText)}</span>
+        </div>
+        
+        <div class="card-body">
+            <div class="info-row">
+                <span class="info-label">ID do Pedido</span>
+                <span class="info-value">#${pedido.id || 'N/A'}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Serviço/Produto</span>
+                <span class="info-value">${escapeHtml(pedido.servico || 'Não especificado')}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Data</span>
+                <span class="info-value">${escapeHtml(dataFormatada)}</span>
+            </div>
+            <div class="info-row" style="margin-top: 0.5rem; border-top: 1px dashed var(--card-border); padding-top: 0.75rem;">
+                <span class="info-label">Valor Total</span>
+                <span class="info-value price">${valorFormatado}</span>
+            </div>
+        </div>
+        
+        <div class="card-footer">
+            ${pedido.observacoes ? `<p><strong>Obs:</strong> ${escapeHtml(pedido.observacoes)}</p>` : ''}
+            <span class="sector-chip">${escapeHtml(pedido.setor || 'Outro')}</span>
+        </div>
+    `;
+
+    return div;
+}
+
+// Resumo dos Status
+function renderizarResumo(pedidosFiltrados) {
+    const total = pedidosFiltrados.length;
+    const pendentes = pedidosFiltrados.filter(p => p.status === 'Pendente').length;
+    const emProducao = pedidosFiltrados.filter(p => p.status === 'Em produção' || p.status === 'Em produo').length;
+    const confirmados = pedidosFiltrados.filter(p => p.status === 'Confirmado').length;
+    const cancelados = pedidosFiltrados.filter(p => p.status === 'Cancelado').length;
+
+    statusSummary.innerHTML = `
+        <div class="summary-card">
+            <span>Total</span>
+            <strong>${total}</strong>
+        </div>
+        <div class="summary-card" style="border-bottom: 3px solid var(--status-pendente-text)">
+            <span>Pendentes</span>
+            <strong>${pendentes}</strong>
+        </div>
+        <div class="summary-card" style="border-bottom: 3px solid #0284c7">
+            <span>Em produção</span>
+            <strong style="color: #0284c7">${emProducao}</strong>
+        </div>
+        <div class="summary-card" style="border-bottom: 3px solid var(--status-confirmado-text)">
+            <span>Confirmados</span>
+            <strong>${confirmados}</strong>
+        </div>
+        <div class="summary-card" style="border-bottom: 3px solid var(--status-cancelado-text)">
+            <span>Cancelados</span>
+            <strong>${cancelados}</strong>
+        </div>
+    `;
+}
+
+// Utilitários
+function mostrarLoading(show) {
+    if (show) {
+        loadingSpinner.classList.remove('hidden');
+        ordersGrid.classList.add('hidden');
+    } else {
+        loadingSpinner.classList.add('hidden');
+        ordersGrid.classList.remove('hidden');
+    }
+}
+
+function mostrarErro(show) {
+    if (show) {
+        errorMessage.classList.remove('hidden');
+        ordersGrid.classList.add('hidden');
+    } else {
+        errorMessage.classList.add('hidden');
+    }
+}
+
+// Evitar XSS básico
+function escapeHtml(unsafe) {
+    if (!unsafe && unsafe !== 0) return '';
+    return String(unsafe)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
