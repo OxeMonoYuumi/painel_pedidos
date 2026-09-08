@@ -7,6 +7,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 let pedidos = [];
 let setoresAtuais = new Set();
 let setorSelecionado = 'Todos';
+let usuarioAtualId = null;
 
 // Elementos do DOM
 const ordersGrid = document.getElementById('orders-grid');
@@ -32,6 +33,8 @@ async function initApp() {
         return;
     }
 
+    usuarioAtualId = session.user.id;
+
     configurarEventos();
     await fetchPedidos();
     renderizarDados();
@@ -45,6 +48,7 @@ async function fetchPedidos() {
         const { data, error } = await supabaseClient
             .from('pedidos')
             .select('*')
+            .eq('user_id', usuarioAtualId)
             .order('criado_em', { ascending: false });
 
         if (error) throw error;
@@ -98,6 +102,7 @@ function configurarEventos() {
 
         const id = document.getElementById('pedido_id').value;
         const dadosPedido = {
+            user_id: usuarioAtualId,
             cliente: document.getElementById('cliente').value,
             telefone: document.getElementById('telefone').value,
             setor: document.getElementById('setor').value,
@@ -115,7 +120,11 @@ function configurarEventos() {
 
             let error;
             if (id) {
-                const res = await supabaseClient.from('pedidos').update(dadosPedido).eq('id', id);
+                const res = await supabaseClient
+                    .from('pedidos')
+                    .update(dadosPedido)
+                    .eq('id', id)
+                    .eq('user_id', usuarioAtualId);
                 error = res.error;
             } else {
                 const res = await supabaseClient.from('pedidos').insert([dadosPedido]);
@@ -339,7 +348,11 @@ window.deletarPedido = async (id) => {
     
     try {
         mostrarLoading(true);
-        const { error } = await supabaseClient.from('pedidos').delete().eq('id', id);
+        const { error } = await supabaseClient
+            .from('pedidos')
+            .delete()
+            .eq('id', id)
+            .eq('user_id', usuarioAtualId);
         if (error) throw error;
         
         await fetchPedidos();
