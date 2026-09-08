@@ -20,6 +20,7 @@
                     <p>Acompanhe e filtre os pedidos em tempo real</p>
                 </div>
                 <div class="header-actions">
+                    <button id="btn-atendente" class="btn-secondary">Atendente virtual</button>
                     <button id="btn-novo-pedido" class="btn-primary">+ Novo Pedido</button>
                     <button id="btn-logout" class="btn-secondary" style="margin-left: 0.5rem;">Sair</button>
                 </div>
@@ -51,6 +52,23 @@
                 
             </div>
         </main>
+    </div>
+
+    <div id="modal-atendente" class="modal hidden">
+        <div class="modal-content assistant-modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2>Atendente virtual</h2>
+                    <p class="assistant-subtitle">Converse para registrar um novo pedido</p>
+                </div>
+                <button id="btn-fechar-atendente" class="btn-close" aria-label="Fechar atendente">&times;</button>
+            </div>
+            <div id="assistant-messages" class="assistant-messages" aria-live="polite"></div>
+            <form id="assistant-form" class="assistant-form">
+                <input id="assistant-input" type="text" autocomplete="off" placeholder="Digite a informação do pedido..." required>
+                <button id="assistant-submit" type="submit" class="btn-primary">Enviar</button>
+            </form>
+        </div>
     </div>
 
     <!-- Modal Novo Pedido -->

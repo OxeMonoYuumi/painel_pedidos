@@ -22,6 +22,13 @@ const btnFecharModal = document.getElementById('btn-fechar-modal');
 const btnCancelar = document.getElementById('btn-cancelar');
 const formNovoPedido = document.getElementById('form-novo-pedido');
 const statusSummary = document.getElementById('status-summary');
+const btnAtendente = document.getElementById('btn-atendente');
+const modalAtendente = document.getElementById('modal-atendente');
+const assistantMessages = document.getElementById('assistant-messages');
+const assistantForm = document.getElementById('assistant-form');
+const assistantInput = document.getElementById('assistant-input');
+const assistantSubmit = document.getElementById('assistant-submit');
+let conversaAtendente = [];
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', initApp);
@@ -65,6 +72,14 @@ async function fetchPedidos() {
 
 // Configurar Eventos do Modal e Formulário
 function configurarEventos() {
+    btnAtendente.addEventListener('click', abrirAtendente);
+
+    document.getElementById('btn-fechar-atendente').addEventListener('click', fecharAtendente);
+    modalAtendente.addEventListener('click', (e) => {
+        if (e.target === modalAtendente) fecharAtendente();
+    });
+    assistantForm.addEventListener('submit', enviarMensagemAtendente);
+
     btnNovoPedido.addEventListener('click', () => {
         formNovoPedido.reset();
         document.getElementById('pedido_id').value = '';
@@ -146,6 +161,61 @@ function configurarEventos() {
             btnSalvar.disabled = false;
         }
     });
+}
+
+function abrirAtendente() {
+    conversaAtendente = [];
+    assistantMessages.innerHTML = '';
+    adicionarMensagem('assistant', 'Olá! Vou ajudar a registrar seu pedido. Qual é o nome do cliente?');
+    modalAtendente.classList.remove('hidden');
+    assistantInput.focus();
+}
+
+function fecharAtendente() {
+    modalAtendente.classList.add('hidden');
+    assistantInput.value = '';
+}
+
+function adicionarMensagem(role, content) {
+    conversaAtendente.push({ role, content });
+    const message = document.createElement('p');
+    message.className = `assistant-message ${role}`;
+    message.textContent = content;
+    assistantMessages.appendChild(message);
+    assistantMessages.scrollTop = assistantMessages.scrollHeight;
+}
+
+async function enviarMensagemAtendente(event) {
+    event.preventDefault();
+    const content = assistantInput.value.trim();
+    if (!content || assistantSubmit.disabled) return;
+
+    adicionarMensagem('user', content);
+    assistantInput.value = '';
+    assistantInput.disabled = true;
+    assistantSubmit.disabled = true;
+    assistantSubmit.textContent = 'Enviando...';
+
+    try {
+        const { data, error } = await supabaseClient.functions.invoke('atendente', {
+            body: { messages: conversaAtendente }
+        });
+        if (error) throw error;
+
+        adicionarMensagem('assistant', data.message);
+        if (data.saved) {
+            await fetchPedidos();
+            renderizarDados();
+        }
+    } catch (error) {
+        console.error('Erro no atendente virtual:', error);
+        adicionarMensagem('assistant', 'Não consegui processar o pedido agora. Tente novamente.');
+    } finally {
+        assistantInput.disabled = false;
+        assistantSubmit.disabled = false;
+        assistantSubmit.textContent = 'Enviar';
+        assistantInput.focus();
+    }
 }
 
 function renderizarDados() {
