@@ -34,11 +34,7 @@ async function initApp() {
 
     configurarEventos();
     await fetchPedidos();
-    if (pedidos.length > 0) {
-        extrairSetores();
-        renderizarFiltros();
-        renderizarPedidos();
-    }
+    renderizarDados();
 }
 
 // Buscar Pedidos do Supabase
@@ -65,7 +61,12 @@ async function fetchPedidos() {
 
 // Configurar Eventos do Modal e Formulário
 function configurarEventos() {
-    btnNovoPedido.addEventListener('click', () => modalNovoPedido.classList.remove('hidden'));
+    btnNovoPedido.addEventListener('click', () => {
+        formNovoPedido.reset();
+        document.getElementById('pedido_id').value = '';
+        document.querySelector('#modal-novo-pedido h2').textContent = 'Novo Pedido';
+        modalNovoPedido.classList.remove('hidden');
+    });
 
     const fecharModal = () => {
         modalNovoPedido.classList.add('hidden');
@@ -125,11 +126,7 @@ function configurarEventos() {
 
             fecharModal();
             await fetchPedidos();
-            if (pedidos.length > 0) {
-                extrairSetores();
-                renderizarFiltros();
-                renderizarPedidos();
-            }
+            renderizarDados();
 
         } catch (err) {
             console.error('Erro ao salvar pedido:', err);
@@ -140,6 +137,12 @@ function configurarEventos() {
             btnSalvar.disabled = false;
         }
     });
+}
+
+function renderizarDados() {
+    extrairSetores();
+    renderizarFiltros();
+    renderizarPedidos();
 }
 
 // Lógica de Filtros
@@ -340,16 +343,7 @@ window.deletarPedido = async (id) => {
         if (error) throw error;
         
         await fetchPedidos();
-        if (pedidos.length > 0) {
-            extrairSetores();
-            renderizarFiltros();
-            renderizarPedidos();
-        } else {
-            ordersGrid.innerHTML = '';
-            setoresAtuais.clear();
-            renderizarFiltros();
-            renderizarResumo([]);
-        }
+        renderizarDados();
     } catch (error) {
         console.error('Erro ao deletar pedido:', error);
         alert('Erro ao excluir pedido.');
@@ -359,7 +353,7 @@ window.deletarPedido = async (id) => {
 };
 
 window.editarPedido = (id) => {
-    const pedido = pedidos.find(p => p.id === id);
+    const pedido = pedidos.find(p => String(p.id) === String(id));
     if (!pedido) return;
     
     document.getElementById('pedido_id').value = pedido.id;
