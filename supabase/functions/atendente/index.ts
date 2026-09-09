@@ -40,7 +40,7 @@ Deno.serve(async (request) => {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'llama-3.3-70b-versatile',
+                model: Deno.env.get('GROQ_MODEL') ?? 'llama-3.1-8b-instant',
                 temperature: 0.2,
                 response_format: { type: 'json_object' },
                 messages: [
@@ -53,9 +53,15 @@ Deno.serve(async (request) => {
             })
         });
 
-        if (!groqResponse.ok) throw new Error('Falha ao consultar o atendente.');
+        if (!groqResponse.ok) {
+            const errorBody = await groqResponse.text();
+            console.error('Erro da Groq:', groqResponse.status, errorBody);
+            throw new Error(`A API do atendente retornou erro ${groqResponse.status}. Verifique a chave GROQ_API_KEY e o modelo configurado.`);
+        }
         const completion = await groqResponse.json();
-        const result = JSON.parse(completion.choices[0].message.content);
+        const content = completion.choices?.[0]?.message?.content;
+        if (!content) throw new Error('A API do atendente não retornou uma resposta.');
+        const result = parseModelJson(content);
         const order = result.order ?? {};
 
         const hasRequiredFields = requiredFields.every((field) => {
@@ -64,7 +70,7 @@ Deno.serve(async (request) => {
         });
 
         if (!result.complete || !hasRequiredFields) {
-            return jsonResponse({ message: result.message, saved: false });
+            return jsonResponse({ message: result.message || 'Ainda preciso de mais informações para completar o pedido.', saved: false });
         }
 
         const { error: insertError } = await supabase.from('pedidos').insert({
@@ -94,4 +100,22 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
         status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
+}
+
+function parseModelJson(content: string) {
+    const cleanedContent = content
+        .trim()
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/i, '');
+
+    try {
+        return JSON.parse(cleanedContent);
+    } catch {
+        const jsonStart = cleanedContent.indexOf('{');
+        const jsonEnd = cleanedContent.lastIndexOf('}');
+        if (jsonStart >= 0 && jsonEnd > jsonStart) {
+            return JSON.parse(cleanedContent.slice(jsonStart, jsonEnd + 1));
+        }
+        throw new Error('A resposta do atendente veio em formato inválido.');
+    }
 }

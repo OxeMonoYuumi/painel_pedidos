@@ -201,15 +201,16 @@ async function enviarMensagemAtendente(event) {
             body: { messages: conversaAtendente }
         });
         if (error) throw error;
+        if (!data || data.error) throw new Error(data?.error || 'Resposta inválida do atendente.');
 
-        adicionarMensagem('assistant', data.message);
+        adicionarMensagem('assistant', data.message || 'Pode me passar mais detalhes do pedido?');
         if (data.saved) {
             await fetchPedidos();
             renderizarDados();
         }
     } catch (error) {
         console.error('Erro no atendente virtual:', error);
-        adicionarMensagem('assistant', 'Não consegui processar o pedido agora. Tente novamente.');
+        adicionarMensagem('assistant', error.message || 'Não consegui processar o pedido agora. Tente novamente.');
     } finally {
         assistantInput.disabled = false;
         assistantSubmit.disabled = false;
