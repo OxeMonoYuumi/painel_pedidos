@@ -1,6 +1,6 @@
 // Configurações do Supabase
-const supabaseUrl = 'https://pwyytcyofxtriulqesqm.supabase.co';
-const supabaseKey = 'sb_publishable_vk-vctYaPnPRm0fWlRkcTQ_RtYigr2L';
+const supabaseUrl = 'https://pauzygjodxkwcwzkiikd.supabase.co';
+const supabaseKey = 'sb_publishable_pGiSZG8QT8cFgOi-9L5gPg_vMSXr0Ks';
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 // Estado da Aplicação
