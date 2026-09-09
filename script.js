@@ -2,6 +2,8 @@
 const supabaseUrl = 'https://pauzygjodxkwcwzkiikd.supabase.co';
 const supabaseKey = 'sb_publishable_pGiSZG8QT8cFgOi-9L5gPg_vMSXr0Ks';
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+const groqApiKey = 'COLOQUE_SUA_CHAVE_GROQ_AQUI';
+const groqModel = 'llama-3.1-8b-instant';
 
 // Estado da Aplicação
 let pedidos = [];
@@ -166,7 +168,7 @@ function configurarEventos() {
 function abrirAtendente() {
     conversaAtendente = [];
     assistantMessages.innerHTML = '';
-    adicionarMensagem('assistant', 'Olá! Vou ajudar a registrar seu pedido. Qual é o nome do cliente?');
+    adicionarMensagem('assistant', 'Olá! Vou ajudar a registrar seu pedido. Pode me informar os detalhes?');
     modalAtendente.classList.remove('hidden');
     assistantInput.focus();
 }
@@ -197,14 +199,46 @@ async function enviarMensagemAtendente(event) {
     assistantSubmit.textContent = 'Enviando...';
 
     try {
-        const { data, error } = await supabaseClient.functions.invoke('atendente', {
-            body: { messages: conversaAtendente }
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${groqApiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: groqModel,
+                temperature: 0.2,
+                response_format: { type: 'json_object' },
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'Você é um atendente de pedidos em português do Brasil. Interprete mensagens livres e converse naturalmente para coletar cliente, telefone, setor, servico, valor, data_pedido, status e observacoes. Não invente informações. Peça apenas o que estiver faltando. status padrão é Pendente. Responda somente JSON válido no formato {"message":"resposta ao cliente","complete":false,"order":{"cliente":"","telefone":"","setor":"","servico":"","valor":0,"data_pedido":"","status":"Pendente","observacoes":""}}. Use complete true somente quando o pedido estiver completo.'
+                    },
+                    ...conversaAtendente
+                ]
+            })
         });
-        if (error) throw error;
-        if (!data || data.error) throw new Error(data?.error || 'Resposta inválida do atendente.');
+        if (!response.ok) throw new Error(`A API do atendente retornou erro ${response.status}.`);
+        const completion = await response.json();
+        const responseContent = completion.choices?.[0]?.message?.content;
+        if (!responseContent) throw new Error('A API do atendente não retornou uma resposta.');
+        const data = parseRespostaAtendente(responseContent);
 
         adicionarMensagem('assistant', data.message || 'Pode me passar mais detalhes do pedido?');
-        if (data.saved) {
+        if (data.complete) {
+            const { error } = await supabaseClient.from('pedidos').insert({
+                user_id: usuarioAtualId,
+                cliente: data.order.cliente,
+                telefone: data.order.telefone || '',
+                setor: data.order.setor,
+                servico: data.order.servico,
+                valor: data.order.valor,
+                data_pedido: data.order.data_pedido,
+                status: data.order.status || 'Pendente',
+                observacoes: data.order.observacoes || ''
+            });
+            if (error) throw error;
+            adicionarMensagem('assistant', 'O pedido foi salvo com sucesso.');
             await fetchPedidos();
             renderizarDados();
         }
@@ -217,6 +251,18 @@ async function enviarMensagemAtendente(event) {
         assistantSubmit.textContent = 'Enviar';
         assistantInput.focus();
     }
+}
+
+function parseRespostaAtendente(content) {
+    const cleanedContent = content.trim()
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/i, '');
+    const jsonStart = cleanedContent.indexOf('{');
+    const jsonEnd = cleanedContent.lastIndexOf('}');
+    if (jsonStart < 0 || jsonEnd <= jsonStart) {
+        throw new Error('A resposta do atendente veio em formato inválido.');
+    }
+    return JSON.parse(cleanedContent.slice(jsonStart, jsonEnd + 1));
 }
 
 function renderizarDados() {
