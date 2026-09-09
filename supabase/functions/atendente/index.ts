@@ -14,7 +14,7 @@ Deno.serve(async (request) => {
 
     try {
         const authorization = request.headers.get('Authorization');
-        if (!authorization) throw new Error('Usuário não autenticado.');
+        if (!authorization) return jsonResponse({ error: 'Usuário não autenticado.' }, 401);
 
         const supabase = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
@@ -22,21 +22,33 @@ Deno.serve(async (request) => {
             { global: { headers: { Authorization: authorization } } }
         );
         const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) throw new Error('Usuário não autenticado.');
+        if (userError || !user) return jsonResponse({ error: 'Usuário não autenticado.' }, 401);
 
-        const { messages } = await request.json();
+        let body;
+        try {
+            body = await request.json();
+        } catch {
+            return jsonResponse({ error: 'Corpo da requisição inválido.' }, 400);
+        }
+        const { messages } = body;
         if (!Array.isArray(messages) || messages.length === 0) {
-            throw new Error('Conversa inválida.');
+            return jsonResponse({ error: 'Conversa inválida.' }, 400);
         }
         const conversation = messages
             .filter((message) => message && (message.role === 'user' || message.role === 'assistant'))
             .map((message) => ({ role: message.role, content: String(message.content).slice(0, 4000) }));
-        if (conversation.length === 0) throw new Error('Conversa inválida.');
+        if (conversation.length === 0) return jsonResponse({ error: 'Conversa inválida.' }, 400);
+
+        const groqApiKey = Deno.env.get('GROQ_API_KEY');
+        if (!groqApiKey) {
+            console.error('Segredo GROQ_API_KEY não configurado.');
+            return jsonResponse({ error: 'A chave da IA não está configurada no Supabase.' }, 500);
+        }
 
         const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${Deno.env.get('GROQ_API_KEY')}`,
+                'Authorization': `Bearer ${groqApiKey}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -56,11 +68,11 @@ Deno.serve(async (request) => {
         if (!groqResponse.ok) {
             const errorBody = await groqResponse.text();
             console.error('Erro da Groq:', groqResponse.status, errorBody);
-            throw new Error(`A API do atendente retornou erro ${groqResponse.status}. Verifique a chave GROQ_API_KEY e o modelo configurado.`);
+            return jsonResponse({ error: `A Groq recusou a requisição (${groqResponse.status}). Verifique GROQ_API_KEY e GROQ_MODEL.` }, 502);
         }
         const completion = await groqResponse.json();
         const content = completion.choices?.[0]?.message?.content;
-        if (!content) throw new Error('A API do atendente não retornou uma resposta.');
+        if (!content) return jsonResponse({ error: 'A API do atendente não retornou uma resposta.' }, 502);
         const result = parseModelJson(content);
         const order = result.order ?? {};
 
@@ -86,12 +98,15 @@ Deno.serve(async (request) => {
                 : 'Pendente',
             observacoes: order.observacoes ? String(order.observacoes) : ''
         });
-        if (insertError) throw insertError;
+        if (insertError) {
+            console.error('Erro ao salvar pedido:', insertError);
+            return jsonResponse({ error: 'Não foi possível salvar o pedido.' }, 500);
+        }
 
         return jsonResponse({ message: 'Pedido registrado com sucesso!', saved: true });
     } catch (error) {
         console.error(error);
-        return jsonResponse({ error: error instanceof Error ? error.message : 'Erro interno.' }, 400);
+        return jsonResponse({ error: error instanceof Error ? error.message : 'Erro interno.' }, 500);
     }
 });
 
