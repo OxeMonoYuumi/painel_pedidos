@@ -211,13 +211,28 @@ async function enviarMensagemAtendente(event) {
         }
     } catch (error) {
         console.error('Erro no atendente virtual:', error);
-        adicionarMensagem('assistant', error.message || 'Não consegui processar o pedido agora. Tente novamente.');
+        const errorMessage = await obterMensagemErroAtendente(error);
+        adicionarMensagem('assistant', errorMessage);
     } finally {
         assistantInput.disabled = false;
         assistantSubmit.disabled = false;
         assistantSubmit.textContent = 'Enviar';
         assistantInput.focus();
     }
+}
+
+async function obterMensagemErroAtendente(error) {
+    try {
+        const response = error?.context;
+        if (response && typeof response.clone === 'function') {
+            const body = await response.clone().json();
+            if (body?.error) return body.error;
+        }
+    } catch (contextError) {
+        console.warn('Não foi possível ler o erro da Edge Function:', contextError);
+    }
+
+    return error?.message || 'Não consegui processar o pedido agora. Tente novamente.';
 }
 
 function renderizarDados() {
